@@ -13,7 +13,7 @@ The focus is on the files "chat_cleaner.py" and "Seq2SeqGen".
 Remember to change the _test strings_ that we'll use as input at intervals during training to give you a feel of
 how fast/well your bot is learning.
 
-## Future Works.
+## Future Work
 Please help make our chatbot better by contributing to this repo.
 I'm working on having the input vectors of the LSTM to be of larger dimensions i.e. each word to be converted to a vector of say 
 100 dimensions using Gensim's Word2Vec.
