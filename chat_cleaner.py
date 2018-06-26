@@ -172,19 +172,19 @@ def wordListGen():
 						line = re.sub('([.,!?])', '', line)
 						line = line[3:]
 						conversationFile.write(line)
-						line = line.replace('\n', ' ').lower()
-						for word in line.split(" "):
-							words.append(word)
+						# line = line.replace('\n', ' ').lower()
+						# for word in line.split(" "):
+						# 	words.append(word)
 					except:
 						pass
-	uniqueWords = list(set(words))
+	# uniqueWords = list(set(words))
 	# wordsFile = open('wordList.txt', 'w', encoding='utf-8')
 	# wordsFile.write(uniqueWords)
 	# wordsFile.close()
 	
-	with open("wordList.txt", "wb") as fp:
-		pickle.dump(uniqueWords, fp)
-	fp.close()
+	# with open("wordList.txt", "wb") as fp:
+	# 	pickle.dump(uniqueWords, fp)
+	# fp.close()
 	conversationFile.close()
 
 

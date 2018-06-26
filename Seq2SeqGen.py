@@ -9,36 +9,11 @@ import os
 import gensim
 from gensim.models import Word2Vec
 from gensim.models.word2vec import LineSentence
+
 # Removes an annoying Tensorflow warning
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
-if (os.path.isfile('embeddingMatrix.npy')):
-	model = Word2Vec.load('embeddingMatrix.npy')
-else:
-	sentences = LineSentence("conversationData.txt")
-	model = Word2Vec(sentences, size=1, window=5,
-						min_count=0, iter=100, workers=4)
-	print('Saving the word embedding matrix')
-	fname = "embeddingMatrix.npy"
-	model.save(fname)
-wordVecs = []
-wordVecsInts = {}
-for i in list(model.wv.vectors):
-    wordVecs.append(i[0])
-wordVecs.append(float(min(model.wv.vectors)-1))
-wordVecs.append(float(max(model.wv.vectors)+1))
 
-wordVecs.sort()
-count = 1
-for i in wordVecs:
-    wordVecsInts[float(i)] = count
-    count += 1
-def wordVecFloatToInt(wordfloat):
-	global model
-	global wordVecsInts
-	return wordVecsInts[wordfloat]
-
-
-def createTrainingMatrices(conversationFileName, wList, maxLen):
+def createTrainingMatrices(conversationFileName, maxLen):
 	global model
 	conversationDictionary = np.load(conversationFileName).item()
 	numExamples = len(conversationDictionary)
@@ -65,9 +40,8 @@ def createTrainingMatrices(conversationFileName, wList, maxLen):
 			except:
 				# print(word)
 				# TODO: This isnt really the right way to handle this scenario
-				encoderMessage[keyIndex] = 0.0
+				encoderMessage[keyIndex] = 0
 				# Check if this part works correctly? If it doesn't, append eos to origi wordlist
-		# encoderMessage[keyIndex + 1] = wList.index('<EOS>')
 		encoderMessage[keyIndex + 1] = wordVecFloatToInt(float(min(model.wv.vectors)-1))
 		# Integerize the decoder string
 		for valueIndex, word in enumerate(valueSplit):
@@ -75,7 +49,7 @@ def createTrainingMatrices(conversationFileName, wList, maxLen):
 				decoderMessage[valueIndex] = wordVecFloatToInt(float(model.wv[word]))
 			except:
 				# print(word)
-				decoderMessage[valueIndex] = 0.0
+				decoderMessage[valueIndex] = 0
 		# Check if this part works correctly? If it doesn't, append eos to origi wordlist
 		decoderMessage[valueIndex + 1] = wordVecFloatToInt(float(min(model.wv.vectors)-1))
 		# print(len(encoderMessage))
@@ -86,7 +60,8 @@ def createTrainingMatrices(conversationFileName, wList, maxLen):
 	xTrain = xTrain[~np.all(xTrain == 0, axis=1)]
 	numExamples = xTrain.shape[0]
 	# print(yTrain)
-	# print(yTrain.shape)
+	print(xTrain.shape)
+	print(yTrain.shape)
 	return numExamples, xTrain, yTrain
 
 def getTrainingBatch(localXTrain, localYTrain, localBatchSize, maxLen):
@@ -101,7 +76,6 @@ def getTrainingBatch(localXTrain, localYTrain, localBatchSize, maxLen):
 
 	# Lagged labels are for the training input into the decoder
 	laggedLabels = []
-	# EOStokenIndex = wordList.index('<EOS>')
 	EOStokenIndex = wordVecFloatToInt(float(min(model.wv.vectors)-1))
 	padTokenIndex = wordVecFloatToInt(float(max(model.wv.vectors)+1))
 	for example in labels:
@@ -122,36 +96,17 @@ def getTrainingBatch(localXTrain, localYTrain, localBatchSize, maxLen):
 	# print(len(laggedLabels))
 	return reversedList, labels, laggedLabels
 
-def translateToSentences(inputs, wList, encoder=False):
-	global model
-	# EOStokenIndex = wList.index('<EOS>')
-	EOStokenIndex = wordVecFloatToInt(float(min(model.wv.vectors)-1))
-	padTokenIndex = wordVecFloatToInt(float(max(model.wv.vectors)+1))
-	numStrings = len(inputs[0])
-	numLengthOfStrings = len(inputs)
-	listOfStrings = [''] * numStrings
-	for mySet in inputs:
-		for index,num in enumerate(mySet):
-			if (num != EOStokenIndex and num != padTokenIndex):
-				if (encoder):
-					# Encodings are in reverse!
-					listOfStrings[index] = wList[num] + " " + listOfStrings[index]
-				else:
-					listOfStrings[index] = listOfStrings[index] + " " + wList[num]
-	listOfStrings = [string.strip() for string in listOfStrings]
-	return listOfStrings
 
-def getTestInput(inputMessage, wList, maxLen):
+def getTestInput(inputMessage, maxLen):
 	global model
 	encoderMessage = np.full((maxLen), wordVecFloatToInt(float(
 		max(model.wv.vectors)+1)), dtype='int32')
 	inputSplit = inputMessage.lower().split()
 	for index,word in enumerate(inputSplit):
 		try:
-			encoderMessage[index] = wList.index(word)
+			encoderMessage[index] = wordVecFloatToInt((float(model.wv[word])))
 		except ValueError:
 			continue
-	# encoderMessage[index + 1] = wList.index('<EOS>')
 	encoderMessage[index + 1] = wordVecFloatToInt(float(min(model.wv.vectors)-1))
 	encoderMessage = encoderMessage[::-1]
 	encoderMessageList=[]
@@ -159,9 +114,10 @@ def getTestInput(inputMessage, wList, maxLen):
 		encoderMessageList.append([num])
 	return encoderMessageList
 
-def idsToSentence(ids, wList):
+def idsToSentence(ids):
 	global model
-	# EOStokenIndex = wList.index('<EOS>')
+	global wordVecsInts
+	global wordsAndVecs
 	EOStokenIndex = wordVecFloatToInt(float(min(model.wv.vectors)-1))
 	padTokenIndex = wordVecFloatToInt(float(max(model.wv.vectors)+1))
 	myStr = ""
@@ -171,7 +127,8 @@ def idsToSentence(ids, wList):
 			listOfResponses.append(myStr)
 			myStr = ""
 		else:
-			myStr = myStr + wList[num[0]] + " "
+			myStr = myStr + wordsAndVecs[(list(wordVecsInts.keys())
+			                 [list(wordVecsInts.values()).index(num[0])])] + " "
 	if myStr:
 		listOfResponses.append(myStr)
 	listOfResponses = [i for i in listOfResponses if i]
@@ -186,41 +143,42 @@ embeddingDim = lstmUnits
 numLayersLSTM = 3
 numIterations = 500000
 
-# Loading in all the data structures
-with open("wordList.txt", "rb") as fp:
-	wordList = pickle.load(fp)
+if (os.path.isfile('embeddingMatrix.npy')):
+	model = Word2Vec.load('embeddingMatrix.npy')
+else:
+	sentences = LineSentence("conversationData.txt")
+	model = Word2Vec(sentences, size=1, window=5,
+                  min_count=0, iter=100, workers=4)
+	print('Saving the word embedding matrix')
+	fname = "embeddingMatrix.npy"
+	model.save(fname)
 
+wordVecs = []
+wordVecsInts = {}
+for i in list(model.wv.vectors):
+    wordVecs.append(i[0])
+wordVecs.append(float(min(model.wv.vectors)-1))
+wordVecs.append(float(max(model.wv.vectors)+1))
+wordVecs.sort()
+count = 1
+for i in wordVecs:
+    wordVecsInts[float(i)] = count
+    count += 1
+# print(count)
 
-vocabSize = len(wordList)
+all_words = list(model.wv.vocab)
+wordsAndVecs = {}
+for word in all_words:
+	wordsAndVecs[float(model.wv[word])] = word
+	wordsAndVecs[float(min(model.wv.vectors)-1)] = '<EOS>'
+	wordsAndVecs[float(max(model.wv.vectors)+1)] = '<pad>'
+	wordsAndVecs[0] = ' '
 
-# If you've run the entirety of word2vec.py then these lines will load in 
-# the embedding matrix.
-# if (os.path.isfile('embeddingMatrix.npy')):
-# 	wordVectors = np.load('embeddingMatrix.npy')
-# 	# wordVectors = gensim.models.KeyedVectors.load_word2vec_format(
-# 	# 	'embeddingMatrix.npy', 'numpy.int32', binary=True)
-# 	# wordVectors = np.matrix(wordVectors)
-# 	# print(type(wordVectors))
-# 	print(wordVectors.shape)
-# 	wordVecDimensions = wordVectors.shape[1]
-# 	# print(wordVecDimensions)
-# else:
-# 	question = 'Since we cant find an embedding matrix, how many dimensions do you want your word vectors to be?: '
-# 	wordVecDimensions = int(eval(input(question)))
+def wordVecFloatToInt(wordfloat):
+	global model
+	global wordVecsInts
+	return wordVecsInts[wordfloat]
 
-# # Add two entries to the word vector matrix. One to represent padding tokens, 
-# # and one to represent an end of sentence token
-# padVector = np.zeros((1, wordVecDimensions), dtype='int32')
-# EOSVector = np.ones((1, wordVecDimensions), dtype='int32')
-# if (os.path.isfile('embeddingMatrix.npy')): 
-# 	wordVectors = np.concatenate((wordVectors,padVector), axis=0)
-# 	wordVectors = np.concatenate((wordVectors,EOSVector), axis=0)
-
-# # Need to modify the word list as well
-# # print(wordList[:10])
-# wordList.append('<pad>')
-# wordList.append('<EOS>')
-# vocabSize = vocabSize + 2
 
 if (os.path.isfile('Seq2SeqXTrain.npy') and os.path.isfile('Seq2SeqYTrain.npy')):
 	xTrain = np.load('Seq2SeqXTrain.npy')
@@ -229,7 +187,7 @@ if (os.path.isfile('Seq2SeqXTrain.npy') and os.path.isfile('Seq2SeqYTrain.npy'))
 	numTrainingExamples = xTrain.shape[0]
 else:
 	numTrainingExamples, xTrain, yTrain = createTrainingMatrices(
-	    'conversationDictionary.npy', wordList, maxEncoderLength)
+	    'conversationDictionary.npy', maxEncoderLength)
 	# print(xTrain)
 	np.save('Seq2SeqXTrain.npy', xTrain)
 	np.save('Seq2SeqYTrain.npy', yTrain)
@@ -249,12 +207,12 @@ encoderLSTM = tf.nn.rnn_cell.BasicLSTMCell(lstmUnits, state_is_tuple=True)
 # Architectural choice of of whether or not to include ^
 
 decoderOutputs, decoderFinalState = tf.contrib.legacy_seq2seq.embedding_rnn_seq2seq(encoderInputs, decoderInputs, encoderLSTM, 
-															vocabSize, vocabSize, embeddingDim, feed_previous=feedPrevious)
+															count, count, embeddingDim, feed_previous=feedPrevious)
 
 decoderPrediction = tf.argmax(decoderOutputs, 2)
 
 lossWeights = [tf.ones_like(l, dtype=tf.float32) for l in decoderLabels]
-loss = tf.contrib.legacy_seq2seq.sequence_loss(decoderOutputs, decoderLabels, lossWeights, vocabSize)
+loss = tf.contrib.legacy_seq2seq.sequence_loss(decoderOutputs, decoderLabels, lossWeights, count)
 optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
 sess = tf.Session()
@@ -292,19 +250,19 @@ for i in range(numIterations):
 	curLoss, _, pred = sess.run([loss, optimizer, decoderPrediction], feed_dict=feedDict)
 	
 	if (i % 50 == 0):
-		print(('Current loss:', curLoss, 'at iteration', i))
+		print(('Current loss: ', curLoss, 'at iteration', i))
 		summary = sess.run(merged, feed_dict=feedDict)
 		writer.add_summary(summary, i)
 	if (i % 25 == 0 and i != 0):
 		num = randint(0,len(encoderTestStrings) - 1)
 		print(encoderTestStrings[num])
-		inputVector = getTestInput(encoderTestStrings[num], wordList, maxEncoderLength);
+		inputVector = getTestInput(encoderTestStrings[num], maxEncoderLength);
 		feedDict = {encoderInputs[t]: inputVector[t] for t in range(maxEncoderLength)}
 		feedDict.update({decoderLabels[t]: zeroVector for t in range(maxDecoderLength)})
 		feedDict.update({decoderInputs[t]: zeroVector for t in range(maxDecoderLength)})
 		feedDict.update({feedPrevious: True})
 		ids = (sess.run(decoderPrediction, feed_dict=feedDict))
-		print(idsToSentence(ids, wordList))
+		print(idsToSentence(ids))
 		
 
 	if (i % 10000 == 0 and i != 0):
