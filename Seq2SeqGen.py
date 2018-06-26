@@ -12,6 +12,7 @@ from gensim.models.word2vec import LineSentence
 
 # Removes an annoying Tensorflow warning
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+os.chdir("../Cleaned Data")
 
 def createTrainingMatrices(conversationFileName, maxLen):
 	global model
