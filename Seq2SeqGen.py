@@ -161,6 +161,8 @@ for i in list(model.wv.vectors):
 wordVecs.append(float(min(model.wv.vectors)-1))
 wordVecs.append(float(max(model.wv.vectors)+1))
 wordVecs.sort()
+
+wordVecsInts[0] = 0
 count = 1
 for i in wordVecs:
     wordVecsInts[float(i)] = count
